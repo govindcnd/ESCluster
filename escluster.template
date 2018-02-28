@@ -1,0 +1,193 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "ElasticsearchDomain resource",
+  "Parameters": {
+    "DomainName" : {
+      "Description" : "Define Elasticsearch Domain name",
+      "Type" : "String",
+      "Default" : "updayes"
+    },
+    "EnvName" : {
+      "Description" : "define the environment name for ES cluster- staging / production",
+      "Type" : "String",
+      "Default" : "staging"
+    },
+    "ElasticsearchVersion" : {
+      "Description" : "User defined Elasticsearch Version",
+      "Type" : "String",
+         "Default": "5.5",
+      "AllowedValues": [
+        "6.0",
+        "5.5",
+        "5.3",
+        "5.1",
+        "2.3",
+        "1.5"
+      ]
+    },
+    "IngressAllow" : {
+         "Description" : "Elastic Search API allowed source IPs",
+         "Type" : "String",
+         "Default" : "0.0.0.0/0"
+    },
+    "KibanaAllow" : {
+         "Description" : "Source Ip to allow kibana Access",
+         "Type" : "String",
+         "Default" : "0.0.0.0/0"
+    },
+    "InstanceCount" : {
+         "Description" : "No of nodes required in ES cluster",
+         "Type" : "String",
+         "Default" : "2"
+    },
+    "InstanceType" : {
+      "Type" : "String",
+      "Default": "t2.small.elasticsearch",
+      "AllowedValues": [
+       "t2.micro.elasticsearch",
+      "t2.small.elasticsearch",
+      "t2.medium.elasticsearch",
+      "m3.medium.elasticsearch",
+      "m3.large.elasticsearch",
+      "m3.xlarge.elasticsearch",
+      "m3.2xlarge.elasticsearch",
+      "m4.large.elasticsearch",
+      "m4.xlarge.elasticsearch",
+      "m4.2xlarge.elasticsearch",
+      "m4.4xlarge.elasticsearch",
+      "m4.10xlarge.elasticsearch",
+      "c4.large.elasticsearch",
+      "c4.xlarge.elasticsearch",
+      "c4.2xlarge.elasticsearch",
+      "c4.4xlarge.elasticsearch",
+      "c4.8xlarge.elasticsearch",
+      "r3.large.elasticsearch",
+      "r3.xlarge.elasticsearch",
+      "r3.2xlarge.elasticsearch",
+      "r3.4xlarge.elasticsearch",
+      "r3.8xlarge.elasticsearch",
+      "r4.large.elasticsearch",
+      "r4.xlarge.elasticsearch",
+      "r4.2xlarge.elasticsearch",
+      "r4.4xlarge.elasticsearch",
+      "r4.8xlarge.elasticsearch",
+      "r4.16xlarge.elasticsearch",
+      "i2.xlarge.elasticsearch",
+      "i2.2xlarge.elasticsearch",
+      "i3.large.elasticsearch",
+      "i3.xlarge.elasticsearch",
+      "i3.2xlarge.elasticsearch",
+      "i3.4xlarge.elasticsearch",
+      "i3.8xlarge.elasticsearch",
+      "i3.16xlarge.elasticsearch"
+      ]
+    },
+  "StorageSize" : {
+      "Description" : "Size of Node in the Cluster in GB's",
+      "Type" : "String",
+      "Default" : "10"
+    },
+    "StorageType" : {
+      "Description" : "Storage Volume Type",
+      "Type" : "String",
+      "Default" : "standard",
+      "AllowedValues" : [
+        "standard",
+        "gp2"
+      ]
+    }
+  },
+  "Resources": {
+    "ElasticsearchDomain": {
+      "Type": "AWS::Elasticsearch::Domain",
+      "Properties": {
+        "DomainName": { "Fn::Sub":  "es-${EnvName}-${DomainName}-${AWS::Region}" },
+        "ElasticsearchVersion": { "Ref": "ElasticsearchVersion" },
+        "ElasticsearchClusterConfig": {
+          "InstanceCount": { "Ref": "InstanceCount" },
+          "InstanceType": { "Ref": "InstanceType" }
+        },
+        "EBSOptions": {
+          "EBSEnabled" : "true",
+          "Iops" : 0,
+          "VolumeSize" : { "Ref": "StorageSize" },
+          "VolumeType" : { "Ref": "StorageType" } 
+        },
+        "SnapshotOptions": {
+          "AutomatedSnapshotStartHour": "0"
+        },
+        "AccessPolicies": {
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "es:*"
+      ],
+      "Condition": {
+        "IpAddress": {
+          "aws:SourceIp": [
+            {"Ref" : "KibanaAllow"}
+          ]
+        }
+      },
+      "Resource": "*"
+    }
+  ]
+},
+        "AdvancedOptions": {
+          "rest.action.multi.allow_explicit_index": "true"
+        },
+        "Tags": [{
+          "Key": "environment",
+          "Value": { "Fn::Sub":  "${EnvName}" }
+        }],
+      }
+    },
+   "mySecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": { "Fn::Sub":  "sec-group-for-${EnvName}-${DomainName}" },
+        "GroupName": { "Fn::Sub":  "essg-${EnvName}-${DomainName}" },
+        "SecurityGroupIngress": [
+          {
+            "FromPort": "443",
+            "IpProtocol": "tcp",
+            "ToPort": "443",
+            "CidrIp":  {"Ref" : "IngressAllow"}
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "DomainArn": {
+      "Value": {
+        "Fn::GetAtt": ["ElasticsearchDomain", "DomainArn"]
+      }
+    },
+    "DomainEndpoint": {
+      "Value": {
+        "Fn::GetAtt": ["ElasticsearchDomain", "DomainEndpoint"]
+      }
+    },
+    "KibanaURL": {
+      "Description": "URL of the kibana",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+             "https://",
+            {
+              "Fn::GetAtt": ["ElasticsearchDomain", "DomainEndpoint"]
+            },
+            "/_plugin/kibana/"
+          ]
+        ]
+      }
+    }
+  }
+}
